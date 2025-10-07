@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>簡単お絵かきアプリ</title>
+    <style>
+        /* ページ全体のスタイル */
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f0f0f0;
+        }
+        /* キャンバスのスタイル */
+        #drawingCanvas {
+            border: 1px solid #ccc;
+            background-color: #ffffff; /* 描画領域を白に設定 */
+            cursor: crosshair; /* 描画中はカーソルを十字に */
+        }
+        /* ツールバー（色と消しゴム）のコンテナ */
+        #toolbar {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column; /* 縦に並べる */
+            gap: 10px;
+            padding: 15px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        /* ツールボタンの共通スタイル */
+        .tool-button {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #ccc;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        /* 選択中のボタンのスタイル */
+        .tool-button.active {
+            border-color: #333;
+            border-width: 4px;
+            transform: scale(1.1);
+        }
+        /* 各色のボタン設定 */
+        #colorRed { background-color: #FF0000; }
+        #colorBlue { background-color: #0000FF; }
+        #colorGreen { background-color: #00AA00; }
+        #colorBlack { background-color: #000000; }
+        /* 消しゴムボタンの設定 */
+        #eraser {
+            background-color: #ffffff;
+            border: 2px solid #333;
+            font-size: 18px;
+            text-align: center;
+            line-height: 36px;
+            color: #333;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="drawingCanvas"></canvas>
+
+    <div id="toolbar">
+        <div id="colorRed" class="tool-button" data-color="#FF0000"></div>
+        <div id="colorBlue" class="tool-button" data-color="#0000FF"></div>
+        <div id="colorGreen" class="tool-button" data-color="#00AA00"></div>
+        <div id="colorBlack" class="tool-button active" data-color="#000000"></div>
+        <div id="eraser" class="tool-button">消</div>
+    </div>
+
+    <script>
+        // DOM要素の取得
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        const toolbar = document.getElementById('toolbar');
+
+        // 描画状態を管理する変数
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let currentColor = '#000000'; // 初期色は黒
+        let currentThickness = 5; // ペンの太さ
+
+        // --- キャンバスの初期設定 ---
+
+        // キャンバスのサイズをウィンドウ全体に設定
+        function setCanvasSize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            // 画面サイズ変更時にも描画状態を保持したい場合は、この関数内で
+            // 既存の内容を一時キャンバスに退避・再描画する必要がありますが、
+            // 今回は簡略化のためリサイズ時はクリアされる仕様とします。
+        }
+
+        setCanvasSize();
+        window.addEventListener('resize', setCanvasSize);
+
+        // 描画スタイルを設定
+        ctx.lineCap = 'round';   // 線の端を丸く
+        ctx.lineJoin = 'round';  // 線の角を丸く
+        ctx.lineWidth = currentThickness;
+        ctx.strokeStyle = currentColor;
+
+        // --- 描画ロジック ---
+
+        /**
+         * 描画開始（マウスダウン/タッチスタート時）
+         */
+        function startDrawing(e) {
+            isDrawing = true;
+            // マウスの位置を記録
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+
+            // クリックしただけで点として描画されるようにする
+            draw(e); 
+        }
+
+        /**
+         * 描画処理（マウスクリックしながら移動/タッチムーブ時）
+         */
+        function draw(e) {
+            if (!isDrawing) return; // 描画中でなければ何もしない
+
+            // パスを開始
+            ctx.beginPath();
+
+            // 始点: 前回の位置
+            ctx.moveTo(lastX, lastY);
+
+            // 終点: 現在の位置
+            ctx.lineTo(e.offsetX, e.offsetY);
+
+            // 描画
+            ctx.stroke();
+
+            // 現在の位置を次の描画の始点として記録
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        }
+
+        /**
+         * 描画終了（マウスアップ/マウスアウト/タッチエンド時）
+         */
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        // --- イベントリスナーの登録 ---
+
+        // マウスイベント
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+
+        // --- ツールバー制御ロジック ---
+
+        /**
+         * 描画色と太さを設定
+         */
+        function setTool(color, thickness, isEraser = false) {
+            currentColor = color;
+            currentThickness = thickness;
+
+            if (isEraser) {
+                // 消しゴムの場合、色をキャンバスの背景色（白）にし、太くする
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 30; // 消しゴムは太めに
+            } else {
+                // ペンの場合、選択された色と太さに戻す
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = currentThickness;
+            }
+        }
+        
+        // ツールボタンのクリック処理
+        toolbar.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('tool-button')) return;
+
+            // すべてのボタンから active クラスを削除
+            document.querySelectorAll('.tool-button').forEach(btn => btn.classList.remove('active'));
+
+            const button = e.target;
+            button.classList.add('active'); // クリックされたボタンに active クラスを追加
+
+            if (button.id === 'eraser') {
+                // 消しゴム選択
+                setTool('#ffffff', 30, true);
+            } else {
+                // 色選択
+                const color = button.getAttribute('data-color');
+                setTool(color, 5, false); // ペンの太さは5に戻す
+            }
+        });
+
+        // アプリケーションの初期設定として黒いペンを選択
+        setTool(currentColor, currentThickness, false);
+
+    </script>
+</body>
+</html>
